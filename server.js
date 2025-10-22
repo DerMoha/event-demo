@@ -10,9 +10,11 @@ const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
-const server = app.listen(3000, () =>
-    console.log("✅ Server läuft auf http://localhost:3000")
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, () =>
+    console.log(`✅ Server läuft auf http://localhost:${PORT}`)
 );
+
 
 const wss = new WebSocketServer({ server });
 const clients = new Set();
