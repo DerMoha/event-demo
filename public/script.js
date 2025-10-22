@@ -11,6 +11,7 @@ const stepAction = document.getElementById("stepAction");
 const pipelineText = document.getElementById("pipeline-text");
 const eventDiv = document.getElementById("events");
 const traditionalDiv = document.getElementById("traditional");
+const rawEventBox = document.getElementById("rawEvent");
 
 // --- Machine refs ---
 const machineBtn = document.getElementById("triggerMachineBtn");
@@ -21,6 +22,8 @@ const mAction = document.getElementById("mAction");
 const machineText = document.getElementById("machine-text");
 const machineDiv = document.getElementById("machineEvents");
 const machineTraditional = document.getElementById("machineTraditional");
+const rawMachineBox = document.getElementById("rawMachineEvent");
+
 
 // --- ORDER EVENT ---
 orderBtn.addEventListener("click", async () => {
@@ -31,12 +34,17 @@ orderBtn.addEventListener("click", async () => {
 
     toggleOrder = !toggleOrder;
     const total = toggleOrder ? 1500 : 450;
+
+    const order = { type: "OrderCreated", data: { id: Date.now(), total } };
+    rawEventBox.textContent = JSON.stringify(order, null, 2);
+
     await fetch("/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "OrderCreated", data: { id: Date.now(), total } }),
+        body: JSON.stringify(order),
     });
 });
+
 
 // --- MACHINE EVENT ---
 machineBtn.addEventListener("click", async () => {
@@ -48,15 +56,20 @@ machineBtn.addEventListener("click", async () => {
     toggleMachine = !toggleMachine;
     const temperature = toggleMachine ? 85 : 70;
     const vibration = toggleMachine ? 8 : 4 + Math.random() * 3;
+
+    const status = {
+        type: "MachineStatus",
+        data: { id: "Machine-42", temperature, vibration: parseFloat(vibration.toFixed(2)) },
+    };
+    rawMachineBox.textContent = JSON.stringify(status, null, 2);
+
     await fetch("/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            type: "MachineStatus",
-            data: { id: "Machine-42", temperature, vibration: parseFloat(vibration.toFixed(2)) },
-        }),
+        body: JSON.stringify(status),
     });
 });
+
 
 // --- Incoming Messages ---
 ws.onmessage = (msg) => {
