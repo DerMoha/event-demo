@@ -30,33 +30,45 @@ const rules = [
 
 
 function evaluateEvent(event) {
-    // Bestellung
     if (event.type === "OrderCreated") {
-        const msg =
+        const result =
             event.data.total > 1000
-                ? `💼 Sales Notification – Order #${event.data.id} (€${event.data.total})`
-                : `✅ Auto-Processing – Order #${event.data.id} (€${event.data.total})`;
-        clients.forEach((c) => c.send(msg));
+                ? { type: "Order", status: "sales", text: `💼 Sales Notification – Order #${event.data.id} (€${event.data.total})` }
+                : { type: "Order", status: "auto", text: `✅ Auto-Processing – Order #${event.data.id} (€${event.data.total})` };
+        clients.forEach((c) => c.send(JSON.stringify(result)));
     }
 
-    // Maschine
     if (event.type === "MachineStatus") {
         const { temperature, vibration } = event.data;
-        let msg = "";
+        let result = { type: "Machine", status: "ok", text: "" };
+
         if (temperature > 80 || vibration > 7) {
-            msg = `🚨 Kritisch! Temp: ${temperature}°C, Vib: ${vibration}g → Wartung sofort.`;
+            result = {
+                type: "Machine",
+                status: "critical",
+                text: `🚨 Kritisch! Temp: ${temperature}°C, Vib: ${vibration}g → Wartung sofort.`,
+            };
         } else if (detectAnomaly(vibration)) {
-            msg = `🤖 KI erkennt abnormales Vibrationsmuster (${vibration}g) → Wartung empfohlen.`;
+            result = {
+                type: "Machine",
+                status: "ai",
+                text: `🤖 KI erkennt abnormales Vibrationsmuster (${vibration}g) → Wartung empfohlen.`,
+            };
         } else {
-            msg = `✅ Maschine stabil – Temp: ${temperature}°C, Vib: ${vibration}g`;
+            result = {
+                type: "Machine",
+                status: "ok",
+                text: `✅ Maschine stabil – Temp: ${temperature}°C, Vib: ${vibration}g`,
+            };
         }
-        clients.forEach((c) => c.send(msg));
+        clients.forEach((c) => c.send(JSON.stringify(result)));
     }
 }
 
 function detectAnomaly(vibration) {
     return vibration > 5 && Math.random() < 0.3;
 }
+
 
 
 app.post("/event", (req, res) => {

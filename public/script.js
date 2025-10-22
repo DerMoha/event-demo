@@ -60,13 +60,21 @@ machineBtn.addEventListener("click", async () => {
 
 // --- Incoming Messages ---
 ws.onmessage = (msg) => {
-    const text = msg.data;
-    if (text.startsWith("💼") || text.startsWith("✅")) handleBusiness(text);
-    else handleMachine(text);
+    let data;
+    try {
+        data = JSON.parse(msg.data);
+    } catch {
+        console.warn("Ungültiges JSON:", msg.data);
+        return;
+    }
+
+    if (data.type === "Order") handleBusiness(data);
+    if (data.type === "Machine") handleMachine(data);
 };
 
 // --- BUSINESS PIPELINE ---
-function handleBusiness(text) {
+function handleBusiness(data) {
+    const text = data.text;
     [stepEvent, stepRules, stepAction].forEach((s) => s.classList.remove("active"));
     stepEvent.classList.add("active");
     pipelineText.textContent = "📨 Bestellung empfangen…";
@@ -75,34 +83,38 @@ function handleBusiness(text) {
         stepEvent.classList.remove("active");
         stepRules.classList.add("active");
         const amount = text.match(/€(\d+)/)?.[1];
-        pipelineText.textContent = `⚖️ Regel: Betrag = ${amount} € → > 1000 € ?`;
+        pipelineText.textContent = `⚖️ Regel: Betrag = ${amount} € → > 1000 €?`;
     }, 1000);
 
     setTimeout(() => {
         stepRules.classList.remove("active");
         stepAction.classList.add("active");
-        pipelineText.textContent = text.includes("Sales")
-            ? "🚀 Große Bestellung → Vertrieb informiert."
-            : "✅ Kleinauftrag → automatisch verarbeitet.";
+        pipelineText.textContent =
+            data.status === "sales"
+                ? "🚀 Große Bestellung → Vertrieb informiert."
+                : "✅ Kleinauftrag → automatisch verarbeitet.";
         const div = document.createElement("div");
         div.textContent = text;
-        div.classList.add(text.includes("Sales") ? "sales" : "auto");
+        div.classList.add(data.status === "sales" ? "sales" : "auto");
         eventDiv.prepend(div);
     }, 3000);
 
     setTimeout(() => {
         const log = document.createElement("div");
         log.classList.add("log");
-        log.textContent = text.includes("Sales")
-            ? "📨 Traditionell: Vertrieb hätte Bestellung erst später bemerkt."
-            : "🕓 Traditionell: Verarbeitung erst nachts im Batch.";
+        log.textContent =
+            data.status === "sales"
+                ? "📨 Traditionell: Vertrieb hätte Bestellung erst später bemerkt."
+                : "🕓 Traditionell: Verarbeitung erst nachts im Batch.";
         traditionalDiv.prepend(log);
         finish();
     }, 5200);
 }
 
+
 // --- MACHINE PIPELINE (mit KI) ---
-function handleMachine(text) {
+function handleMachine(data) {
+    const text = data.text;
     [mEvent, mRules, mAI, mAction].forEach((s) => s.classList.remove("active"));
     mEvent.classList.add("active");
     machineText.textContent = "📡 Sensor-Event empfangen…";
@@ -110,39 +122,56 @@ function handleMachine(text) {
     setTimeout(() => {
         mEvent.classList.remove("active");
         mRules.classList.add("active");
-        machineText.textContent = "⚖️ Prüfe Temperatur & Vibration gegen Grenzwerte…";
+        machineText.textContent = "⚖️ Prüfe Temperatur & Vibration…";
     }, 1000);
+
+    if (data.status === "critical") {
+        setTimeout(() => {
+            mRules.classList.remove("active");
+            mAction.classList.add("active");
+            machineText.textContent = "🚨 Grenzwert überschritten → Wartung sofort!";
+            const div = document.createElement("div");
+            div.textContent = text;
+            div.classList.add("sales");
+            machineDiv.prepend(div);
+        }, 2800);
+
+        setTimeout(() => {
+            const log = document.createElement("div");
+            log.classList.add("log");
+            log.textContent = "⚪ Traditionell: Fehler erst nach Stillstand bemerkt.";
+            machineTraditional.prepend(log);
+            finish();
+        }, 5000);
+        return;
+    }
 
     setTimeout(() => {
         mRules.classList.remove("active");
         mAI.classList.add("active");
-        machineText.textContent = text.includes("KI")
-            ? "🧠 KI erkennt Anomalie → Wartung empfohlen."
-            : "🧠 KI prüft Muster → keine Auffälligkeit.";
+        machineText.textContent =
+            data.status === "ai"
+                ? "🧠 KI erkennt ungewöhnliches Muster!"
+                : "🧠 KI überprüft Daten – keine Auffälligkeit.";
     }, 2800);
 
     setTimeout(() => {
         mAI.classList.remove("active");
         mAction.classList.add("active");
-        machineText.textContent = text.includes("🚨")
-            ? "🛠️ Alarm! Wartung sofort ausgelöst."
-            : text.includes("KI")
-                ? "🛠️ Vorbeugende Wartung geplant."
-                : "✅ Maschine stabil.";
+        if (data.status === "ai") machineText.textContent = "🛠️ Vorbeugende Wartung empfohlen.";
+        else machineText.textContent = "✅ Maschine läuft stabil.";
         const div = document.createElement("div");
         div.textContent = text;
-        div.classList.add(text.includes("🚨") ? "sales" : "auto");
+        div.classList.add(data.status === "ai" ? "sales" : "auto");
         machineDiv.prepend(div);
     }, 4600);
 
     setTimeout(() => {
         const log = document.createElement("div");
         log.classList.add("log");
-        log.textContent = text.includes("🚨")
-            ? "⚪ Traditionell: Fehler erst nach Stillstand erkannt."
-            : text.includes("KI")
-                ? "⚪ Traditionell: Keine KI → Problem wäre unentdeckt geblieben."
-                : "⚪ Traditionell: Keine Aktion nötig.";
+        if (data.status === "ai")
+            log.textContent = "⚪ Traditionell: Keine KI → Ausfall wäre unentdeckt geblieben.";
+        else log.textContent = "⚪ Traditionell: Keine Aktion nötig.";
         machineTraditional.prepend(log);
         finish();
     }, 6500);
