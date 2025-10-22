@@ -28,18 +28,36 @@ const rules = [
     { event: "OrderCreated", condition: (d) => d.total <= 1000, action: "autoProcess" },
 ];
 
+
 function evaluateEvent(event) {
-    for (const rule of rules) {
-        if (rule.event === event.type && rule.condition(event.data)) {
-            const msg =
-                rule.action === "notifySales"
-                    ? `💼 Sales Notification – Order #${event.data.id} (€${event.data.total})`
-                    : `✅ Auto-Processing – Order #${event.data.id} (€${event.data.total})`;
-            console.log(msg);
-            clients.forEach((c) => c.send(msg));
+    // Bestellung
+    if (event.type === "OrderCreated") {
+        const msg =
+            event.data.total > 1000
+                ? `💼 Sales Notification – Order #${event.data.id} (€${event.data.total})`
+                : `✅ Auto-Processing – Order #${event.data.id} (€${event.data.total})`;
+        clients.forEach((c) => c.send(msg));
+    }
+
+    // Maschine
+    if (event.type === "MachineStatus") {
+        const { temperature, vibration } = event.data;
+        let msg = "";
+        if (temperature > 80 || vibration > 7) {
+            msg = `🚨 Kritisch! Temp: ${temperature}°C, Vib: ${vibration}g → Wartung sofort.`;
+        } else if (detectAnomaly(vibration)) {
+            msg = `🤖 KI erkennt abnormales Vibrationsmuster (${vibration}g) → Wartung empfohlen.`;
+        } else {
+            msg = `✅ Maschine stabil – Temp: ${temperature}°C, Vib: ${vibration}g`;
         }
+        clients.forEach((c) => c.send(msg));
     }
 }
+
+function detectAnomaly(vibration) {
+    return vibration > 5 && Math.random() < 0.3;
+}
+
 
 app.post("/event", (req, res) => {
     const event = req.body;

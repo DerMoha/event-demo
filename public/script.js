@@ -1,96 +1,157 @@
 const ws = new WebSocket(`ws://${location.host}`);
-const eventDiv = document.getElementById("events");
-const traditionalDiv = document.getElementById("traditional");
-const btn = document.getElementById("triggerBtn");
+let isProcessing = false;
+let toggleOrder = false;
+let toggleMachine = false;
 
+// --- Business refs ---
+const orderBtn = document.getElementById("triggerOrderBtn");
 const stepEvent = document.getElementById("stepEvent");
 const stepRules = document.getElementById("stepRules");
 const stepAction = document.getElementById("stepAction");
 const pipelineText = document.getElementById("pipeline-text");
+const eventDiv = document.getElementById("events");
+const traditionalDiv = document.getElementById("traditional");
 
-let isProcessing = false;
-let toggleHighValue = false; // abwechselnd große/kleine Bestellung
+// --- Machine refs ---
+const machineBtn = document.getElementById("triggerMachineBtn");
+const mEvent = document.getElementById("mEvent");
+const mRules = document.getElementById("mRules");
+const mAI = document.getElementById("mAI");
+const mAction = document.getElementById("mAction");
+const machineText = document.getElementById("machine-text");
+const machineDiv = document.getElementById("machineEvents");
+const machineTraditional = document.getElementById("machineTraditional");
 
-ws.onopen = () => console.log("✅ WebSocket verbunden");
-
-btn.addEventListener("click", async () => {
+// --- ORDER EVENT ---
+orderBtn.addEventListener("click", async () => {
     if (isProcessing) return;
     isProcessing = true;
-    btn.disabled = true;
-    pipelineText.textContent = "📨 Sende neue Bestellung...";
+    orderBtn.disabled = true;
+    machineBtn.disabled = true;
 
-    // abwechselnd groß/klein simulieren
-    toggleHighValue = !toggleHighValue;
-    const total = toggleHighValue ? 1500 : 450;
-
-    const order = {
-        type: "OrderCreated",
-        data: {
-            id: Math.floor(Math.random() * 10000),
-            total: total,
-        },
-    };
-
+    toggleOrder = !toggleOrder;
+    const total = toggleOrder ? 1500 : 450;
     await fetch("/event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order),
+        body: JSON.stringify({ type: "OrderCreated", data: { id: Date.now(), total } }),
     });
 });
 
+// --- MACHINE EVENT ---
+machineBtn.addEventListener("click", async () => {
+    if (isProcessing) return;
+    isProcessing = true;
+    orderBtn.disabled = true;
+    machineBtn.disabled = true;
+
+    toggleMachine = !toggleMachine;
+    const temperature = toggleMachine ? 85 : 70;
+    const vibration = toggleMachine ? 8 : 4 + Math.random() * 3;
+    await fetch("/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            type: "MachineStatus",
+            data: { id: "Machine-42", temperature, vibration: parseFloat(vibration.toFixed(2)) },
+        }),
+    });
+});
+
+// --- Incoming Messages ---
 ws.onmessage = (msg) => {
     const text = msg.data;
-    const div = document.createElement("div");
-
-    if (text.includes("Sales")) div.classList.add("sales");
-    if (text.includes("Auto")) div.classList.add("auto");
-    div.textContent = text;
-    eventDiv.prepend(div);
-
-    runPipeline(text);
+    if (text.startsWith("💼") || text.startsWith("✅")) handleBusiness(text);
+    else handleMachine(text);
 };
 
-function runPipeline(text) {
+// --- BUSINESS PIPELINE ---
+function handleBusiness(text) {
     [stepEvent, stepRules, stepAction].forEach((s) => s.classList.remove("active"));
-
-    // Schritt 1: Event empfangen
     stepEvent.classList.add("active");
-    pipelineText.textContent = "📨 Neues Event empfangen – Bestellung wird geprüft...";
+    pipelineText.textContent = "📨 Bestellung empfangen…";
 
     setTimeout(() => {
         stepEvent.classList.remove("active");
         stepRules.classList.add("active");
         const amount = text.match(/€(\d+)/)?.[1];
-        pipelineText.textContent = `⚖️ Regelprüfung: Betrag = ${amount} € → Ist > 1000 €?`;
-    }, 1200);
+        pipelineText.textContent = `⚖️ Regel: Betrag = ${amount} € → > 1000 € ?`;
+    }, 1000);
 
     setTimeout(() => {
         stepRules.classList.remove("active");
         stepAction.classList.add("active");
-        if (text.includes("Sales")) {
-            pipelineText.textContent =
-                "🚀 Regel erfüllt! → Große Bestellung erkannt → Vertrieb wird sofort informiert.";
-        } else {
-            pipelineText.textContent =
-                "✅ Regel nicht erfüllt → Kleinauftrag → Automatische Verarbeitung ausgelöst.";
-        }
-    }, 3200);
+        pipelineText.textContent = text.includes("Sales")
+            ? "🚀 Große Bestellung → Vertrieb informiert."
+            : "✅ Kleinauftrag → automatisch verarbeitet.";
+        const div = document.createElement("div");
+        div.textContent = text;
+        div.classList.add(text.includes("Sales") ? "sales" : "auto");
+        eventDiv.prepend(div);
+    }, 3000);
 
     setTimeout(() => {
-        stepAction.classList.remove("active");
-        pipelineText.textContent =
-            "Klicke auf „Nächste Bestellung simulieren“, um den nächsten Fall zu sehen.";
-        isProcessing = false;
-        btn.disabled = false;
-    }, 5500);
+        const log = document.createElement("div");
+        log.classList.add("log");
+        log.textContent = text.includes("Sales")
+            ? "📨 Traditionell: Vertrieb hätte Bestellung erst später bemerkt."
+            : "🕓 Traditionell: Verarbeitung erst nachts im Batch.";
+        traditionalDiv.prepend(log);
+        finish();
+    }, 5200);
+}
 
-    // Rechts: traditioneller Vergleich
+// --- MACHINE PIPELINE (mit KI) ---
+function handleMachine(text) {
+    [mEvent, mRules, mAI, mAction].forEach((s) => s.classList.remove("active"));
+    mEvent.classList.add("active");
+    machineText.textContent = "📡 Sensor-Event empfangen…";
+
     setTimeout(() => {
-        const t = document.createElement("div");
-        t.classList.add("log");
-        t.textContent = text.includes("Sales")
-            ? "📨 Vertrieb hätte diese Bestellung erst Stunden später bemerkt (manuell)."
-            : "🕓 Kleinauftrag würde abends im Batch-Prozess verarbeitet werden.";
-        traditionalDiv.prepend(t);
-    }, 6000);
+        mEvent.classList.remove("active");
+        mRules.classList.add("active");
+        machineText.textContent = "⚖️ Prüfe Temperatur & Vibration gegen Grenzwerte…";
+    }, 1000);
+
+    setTimeout(() => {
+        mRules.classList.remove("active");
+        mAI.classList.add("active");
+        machineText.textContent = text.includes("KI")
+            ? "🧠 KI erkennt Anomalie → Wartung empfohlen."
+            : "🧠 KI prüft Muster → keine Auffälligkeit.";
+    }, 2800);
+
+    setTimeout(() => {
+        mAI.classList.remove("active");
+        mAction.classList.add("active");
+        machineText.textContent = text.includes("🚨")
+            ? "🛠️ Alarm! Wartung sofort ausgelöst."
+            : text.includes("KI")
+                ? "🛠️ Vorbeugende Wartung geplant."
+                : "✅ Maschine stabil.";
+        const div = document.createElement("div");
+        div.textContent = text;
+        div.classList.add(text.includes("🚨") ? "sales" : "auto");
+        machineDiv.prepend(div);
+    }, 4600);
+
+    setTimeout(() => {
+        const log = document.createElement("div");
+        log.classList.add("log");
+        log.textContent = text.includes("🚨")
+            ? "⚪ Traditionell: Fehler erst nach Stillstand erkannt."
+            : text.includes("KI")
+                ? "⚪ Traditionell: Keine KI → Problem wäre unentdeckt geblieben."
+                : "⚪ Traditionell: Keine Aktion nötig.";
+        machineTraditional.prepend(log);
+        finish();
+    }, 6500);
+}
+
+function finish() {
+    isProcessing = false;
+    orderBtn.disabled = false;
+    machineBtn.disabled = false;
+    pipelineText.textContent = "Bereit.";
+    machineText.textContent = "Bereit.";
 }
